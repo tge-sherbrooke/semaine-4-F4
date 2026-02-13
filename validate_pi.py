@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["gpiozero", "adafruit-blinka"]
+# dependencies = ["gpiozero", "rpi-gpio", "adafruit-blinka"]
 # ///
 """
 Local Hardware Validation for Formatif F4

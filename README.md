@@ -126,7 +126,9 @@ def read_sensor(sensor):
     """Thread producteur: lit le capteur periodiquement."""
     while not stop_event.is_set():
         try:
-            data = sensor.read()
+            temperature = sensor.temperature
+            humidity = sensor.relative_humidity
+            data = {"temperature": temperature, "humidity": humidity}
             data_queue.put(data)
             print(f"Lecture: {data}")
         except Exception as e:
@@ -156,6 +158,13 @@ def on_button_press():
 
 def main():
     """Fonction principale."""
+    # Initialiser le capteur AHT20
+    import board
+    import adafruit_ahtx0
+
+    i2c = board.I2C()
+    sensor = adafruit_ahtx0.AHTx0(i2c)
+
     # Setup button
     button = Button(BUTTON_PIN, bounce_time=0.1)
     button.when_pressed = on_button_press
