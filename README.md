@@ -7,6 +7,22 @@
 
 ---
 
+> **Pratique autonome** -- Ce formatif est une evaluation formative (non notee). Contrairement au laboratoire guide, vous devez completer les taches de maniere autonome. Les tests automatiques vous donnent une retroaction immediate a chaque push.
+
+## Ce que vous avez appris en labo
+
+Le laboratoire de la semaine 4 vous a guide a travers :
+
+- Structuration d'un script Python avec fonctions et main guard
+- Creation de threads pour lectures de capteurs en arriere-plan
+- Utilisation de `queue.Queue` pour communication thread-safe
+- Gestion d'un bouton avec callbacks gpiozero
+- Arret propre d'un programme multi-threade
+
+Ce formatif vous demande d'appliquer ces competences de maniere autonome.
+
+---
+
 ## Progressive Milestones
 
 Ce formatif utilise des **jalons progressifs** avec retroaction detaillee:
@@ -86,7 +102,10 @@ Ce formatif vise a verifier que vous etes capable de :
 ## Structure de code recommandee
 
 ```python
-#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["gpiozero"]
+# ///
 """Programme principal avec threading et callbacks."""
 
 import threading
