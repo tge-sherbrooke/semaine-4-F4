@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
 """
-Milestone 3: Callbacks and Cleanup (40 points)
-===============================================
+Milestone 3: Bouton Polling et Cleanup (40 points)
+===================================================
 
 This milestone verifies that the student has:
-1. Used gpiozero for button callbacks
+1. Used CircuitPython digitalio for button polling
 2. Implemented clean shutdown with Event
-3. Proper error handling in callbacks
+3. Proper error handling in polling thread
 4. KeyboardInterrupt handling for Ctrl+C
 
-These tests verify code STRUCTURE for callbacks and cleanup patterns.
+These tests verify code STRUCTURE for polling and cleanup patterns.
 """
 
 import os
@@ -35,16 +34,17 @@ REPO_ROOT = get_repo_root()
 
 
 # ---------------------------------------------------------------------------
-# Test 3.1: gpiozero Import (10 points)
+# Test 3.1: digitalio + board Import (10 points)
 # ---------------------------------------------------------------------------
-def test_gpiozero_import():
+def test_digitalio_button_import():
     """
-    Verify that the script imports gpiozero.
+    Verify that the script imports digitalio and board (not gpiozero).
 
-    Expected: 'from gpiozero import' Button or similar
+    Expected: 'import digitalio' and 'import board'
 
-    Suggestion: Add gpiozero import for button handling:
-        from gpiozero import Button
+    Suggestion: Add digitalio and board imports for button handling:
+        import board
+        import digitalio
     """
     script_path = REPO_ROOT / "main.py"
 
@@ -53,35 +53,68 @@ def test_gpiozero_import():
 
     content = script_path.read_text()
 
+    # Check for digitalio import
+    has_digitalio = any([
+        "import digitalio" in content,
+        "from digitalio" in content,
+    ])
+
+    # Check for board import
+    has_board = any([
+        "import board" in content,
+        "from board" in content,
+    ])
+
+    # Check for gpiozero (should NOT be present)
     has_gpiozero = any([
         "gpiozero" in content,
         "from gpiozero" in content,
     ])
 
-    if not has_gpiozero:
+    if has_gpiozero:
         pytest.fail(
             f"\n\n"
-            f"Expected: gpiozero import for button callbacks\n"
-            f"Actual: No gpiozero import found\n\n"
-            f"Suggestion: Add gpiozero import:\n"
-            f"  from gpiozero import Button\n"
-            f"\n"
-            f"gpiozero provides simple button handling with callbacks\n"
-            f"that work on Raspberry Pi 5.\n"
+            f"Votre code utilise gpiozero.\n"
+            f"Utilisez digitalio pour lire le bouton par polling,\n"
+            f"comme montre dans la theorie semaine 4.\n\n"
+            f"Suggestion: Remplacez gpiozero par digitalio:\n"
+            f"  import board\n"
+            f"  import digitalio\n"
+        )
+
+    if not has_digitalio or not has_board:
+        missing = []
+        if not has_digitalio:
+            missing.append("digitalio")
+        if not has_board:
+            missing.append("board")
+        pytest.fail(
+            f"\n\n"
+            f"Votre code n'importe pas {' et '.join(missing)}.\n"
+            f"Ajoutez 'import board' et 'import digitalio' en haut\n"
+            f"de votre script pour lire le bouton.\n\n"
+            f"Suggestion:\n"
+            f"  import board\n"
+            f"  import digitalio\n"
         )
 
 
 # ---------------------------------------------------------------------------
-# Test 3.2: Callback Pattern (10 points)
+# Test 3.2: Button Polling Pattern (10 points)
 # ---------------------------------------------------------------------------
-def test_callback_pattern():
+def test_button_polling_pattern():
     """
-    Verify that button callbacks are defined.
+    Verify that button polling with digitalio is used.
 
-    Expected: when_pressed or when_released assignment
+    Expected: digitalio configuration and button.value reading
 
-    Suggestion: Set up button callbacks:
-        button.when_pressed = on_button_press
+    Suggestion: Configure and poll the button:
+        button = digitalio.DigitalInOut(board.GP17)
+        button.direction = digitalio.Direction.INPUT
+        button.pull = digitalio.Pull.UP
+        # In a loop:
+        if not button.value:
+            print("Bouton appuye!")
     """
     script_path = REPO_ROOT / "main.py"
 
@@ -90,26 +123,55 @@ def test_callback_pattern():
 
     content = script_path.read_text()
 
-    has_callback = any([
+    # Check for gpiozero callback patterns (should NOT be present)
+    has_gpiozero_callback = any([
         "when_pressed" in content,
         "when_released" in content,
         "when_held" in content,
     ])
 
-    if not has_callback:
+    if has_gpiozero_callback:
         pytest.fail(
             f"\n\n"
-            f"Expected: Button callback assignment (when_pressed, etc.)\n"
-            f"Actual: No callback pattern found\n\n"
-            f"Suggestion: Set up button callbacks:\n"
-            f"  from gpiozero import Button\n"
+            f"Votre code utilise des callbacks gpiozero (when_pressed).\n"
+            f"Utilisez plutot digitalio polling (button.value dans une boucle)\n"
+            f"comme montre dans la theorie.\n\n"
+            f"Suggestion: Remplacez le callback par du polling:\n"
+            f"  button = digitalio.DigitalInOut(board.GP17)\n"
+            f"  button.direction = digitalio.Direction.INPUT\n"
+            f"  button.pull = digitalio.Pull.UP\n"
             f"\n"
-            f"  button = Button(17, bounce_time=0.1)\n"
-            f"\n"
-            f"  def on_button_press():\n"
-            f"      print(\"Bouton appuye!\")\n"
-            f"\n"
-            f"  button.when_pressed = on_button_press\n"
+            f"  while not stop_event.is_set():\n"
+            f"      if not button.value:\n"
+            f"          print(\"Bouton appuye!\")\n"
+            f"      time.sleep(0.05)\n"
+        )
+
+    # Check for digitalio polling patterns
+    has_polling = any([
+        "button.value" in content,
+        ".value" in content and "digitalio" in content,
+        "DigitalInOut" in content,
+        "digitalio.DigitalInOut" in content,
+        "Direction.INPUT" in content,
+        "digitalio.Direction.INPUT" in content,
+        "Pull.UP" in content,
+        "digitalio.Pull.UP" in content,
+    ])
+
+    if not has_polling:
+        pytest.fail(
+            f"\n\n"
+            f"Votre code doit lire le bouton par polling avec digitalio.\n"
+            f"Configurez avec:\n"
+            f"  button = digitalio.DigitalInOut(board.GP17)\n"
+            f"  button.direction = digitalio.Direction.INPUT\n"
+            f"  button.pull = digitalio.Pull.UP\n\n"
+            f"Puis lisez button.value dans une boucle:\n"
+            f"  while not stop_event.is_set():\n"
+            f"      if not button.value:\n"
+            f"          print(\"Bouton appuye!\")\n"
+            f"      time.sleep(0.05)\n"
         )
 
 
@@ -161,25 +223,30 @@ def test_stop_event():
 
 
 # ---------------------------------------------------------------------------
-# Test 3.4: Try/Except in Callbacks (5 points)
+# Test 3.4: Try/Except in Polling Thread (5 points)
 # ---------------------------------------------------------------------------
 def test_callback_error_handling():
     """
-    Verify that callbacks include error handling.
+    Verify that the polling thread includes error handling.
 
-    Expected: try/except in callback functions
+    Expected: try/except in polling and thread functions
 
     WHY THIS MATTERS:
-    gpiozero runs callbacks in background threads.
-    Exceptions in callbacks are SILENTLY IGNORED!
-    Always wrap callback code in try/except.
+    Le thread de polling du bouton s'execute en arriere-plan.
+    Les exceptions dans un thread ne sont PAS affichees dans le
+    terminal principal! Toujours entourer le code du thread
+    avec try/except.
 
-    Suggestion: Add error handling in callbacks:
-        def on_button_press():
-            try:
-                # Your code
-            except Exception as e:
-                print(f"Callback error: {e}")
+    Suggestion: Add error handling in polling thread:
+        def button_polling_thread():
+            while not stop_event.is_set():
+                try:
+                    current = button.value
+                    if not current:
+                        print("Bouton appuye!")
+                except Exception as e:
+                    print(f"Erreur polling: {e}")
+                time.sleep(0.05)
     """
     script_path = REPO_ROOT / "main.py"
 
@@ -198,16 +265,22 @@ def test_callback_error_handling():
             f"Expected: Multiple try/except blocks (at least 2)\n"
             f"Actual: Found {try_count} try blocks, {except_count} except blocks\n\n"
             f"WHY THIS MATTERS:\n"
-            f"  gpiozero runs callbacks in background threads.\n"
-            f"  Exceptions in callbacks are SILENTLY IGNORED!\n"
-            f"  Your button may appear to stop working with no error message.\n\n"
-            f"Suggestion: ALWAYS wrap callback code in try/except:\n"
-            f"  def on_button_press():\n"
-            f"      try:\n"
-            f"          data = sensor.read()\n"
-            f"          print(f\"Temperature: {{data}}\")\n"
-            f"      except Exception as e:\n"
-            f"          print(f\"Erreur dans callback: {{e}}\")\n"
+            f"  Le thread de polling du bouton s'execute en arriere-plan.\n"
+            f"  Les exceptions dans un thread ne sont PAS affichees\n"
+            f"  dans le terminal principal!\n"
+            f"  Votre bouton peut sembler \"arreter de fonctionner\"\n"
+            f"  sans message d'erreur.\n\n"
+            f"Suggestion: TOUJOURS entourer le code du thread\n"
+            f"de polling avec try/except:\n"
+            f"  def button_polling_thread():\n"
+            f"      while not stop_event.is_set():\n"
+            f"          try:\n"
+            f"              current = button.value\n"
+            f"              if not current:\n"
+            f"                  print(\"Bouton appuye!\")\n"
+            f"          except Exception as e:\n"
+            f"              print(f\"Erreur polling: {{e}}\")\n"
+            f"          time.sleep(0.05)\n"
         )
 
 
