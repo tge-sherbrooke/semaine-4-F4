@@ -1,4 +1,4 @@
-# Formatif F4 — Threading et Callbacks Python
+# Formatif F4 — Threading et Bouton Polling Python
 
 **Cours** : 243-413-SH — Introduction aux objets connectes
 **Semaine** : 4
@@ -16,7 +16,7 @@ Le laboratoire de la semaine 4 vous a guide a travers :
 - Structuration d'un script Python avec fonctions et main guard
 - Creation de threads pour lectures de capteurs en arriere-plan
 - Utilisation de `queue.Queue` pour communication thread-safe
-- Gestion d'un bouton avec callbacks gpiozero
+- Lecture d'un bouton par polling digitalio dans un thread dedie
 - Arret propre d'un programme multi-threade
 
 Ce formatif vous demande d'appliquer ces competences de maniere autonome.
@@ -31,7 +31,7 @@ Ce formatif utilise des **jalons progressifs** avec retroaction detaillee:
 |-------|--------|-------------|
 | **Milestone 1** | 25 pts | Script main.py, garde `__main__`, fonctions, constantes |
 | **Milestone 2** | 35 pts | Imports threading/queue, utilisation Queue et Thread |
-| **Milestone 3** | 40 pts | gpiozero callbacks, Event pour arret, gestion erreurs |
+| **Milestone 3** | 40 pts | digitalio bouton polling, Event pour arret, gestion erreurs |
 
 **Chaque test echoue vous dit**:
 - Ce qui etait attendu
@@ -46,7 +46,7 @@ Ce formatif vise a verifier que vous etes capable de :
 1. Structurer du code Python avec des fonctions et un garde main
 2. Utiliser le threading pour des lectures de capteurs non-bloquantes
 3. Utiliser Queue pour la communication thread-safe
-4. Implementer des callbacks de bouton avec gpiozero
+4. Lire un bouton avec digitalio polling dans un thread dedie
 5. Gerer proprement l'arret du programme (Ctrl+C)
 
 ---
@@ -61,7 +61,7 @@ Ce formatif vise a verifier que vous etes capable de :
 **Solution**: Le threading permet de:
 - Lire les capteurs en arriere-plan (thread producteur)
 - Traiter les donnees dans un autre thread (thread consommateur)
-- Repondre aux boutons immediatement (callbacks)
+- Detecter les appuis bouton immediatement (polling dans un thread)
 
 ---
 
@@ -73,7 +73,7 @@ Ce formatif vise a verifier que vous etes capable de :
 +-------------------------------------------------------------+
 |                                                             |
 |  1. Creer main.py avec la structure de base                 |
-|     +-- Imports (threading, queue, gpiozero)                |
+|     +-- Imports (threading, queue, digitalio)               |
 |     +-- Constantes de configuration                         |
 |     +-- Fonctions (read_sensor, publish_data)               |
 |     +-- Garde __main__                                      |
@@ -84,9 +84,9 @@ Ce formatif vise a verifier que vous etes capable de :
 |     +-- Thread consommateur (traitement/publication)        |
 |     +-- Event pour l'arret propre                           |
 |                                                             |
-|  3. Ajouter les callbacks gpiozero                          |
-|     +-- Bouton avec when_pressed                            |
-|     +-- Gestion d'erreurs dans les callbacks                |
+|  3. Ajouter le polling bouton digitalio                     |
+|     +-- Thread de polling avec button.value                 |
+|     +-- Gestion d'erreurs dans le thread de polling         |
 |     +-- Gestion de KeyboardInterrupt                        |
 |                                                             |
 |  4. Tester sur Raspberry Pi                                 |
@@ -104,22 +104,28 @@ Ce formatif vise a verifier que vous etes capable de :
 ```python
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["gpiozero"]
+# dependencies = ["adafruit-blinka"]
 # ///
-"""Programme principal avec threading et callbacks."""
+"""Programme principal avec threading et bouton polling."""
 
 import threading
 import queue
 import time
-from gpiozero import Button
+import board
+import digitalio
 
 # Configuration
 SENSOR_INTERVAL = 5  # secondes entre lectures
-BUTTON_PIN = 17      # GPIO pour le bouton
+BUTTON_PIN = board.GP17  # GPIO pour le bouton
 
 # Communication inter-threads
 data_queue = queue.Queue()
 stop_event = threading.Event()
+
+# Configuration du bouton
+button = digitalio.DigitalInOut(BUTTON_PIN)
+button.direction = digitalio.Direction.INPUT
+button.pull = digitalio.Pull.UP
 
 
 def read_sensor(sensor):
@@ -147,42 +153,47 @@ def process_data():
             continue  # Pas de donnees, continuer
 
 
-def on_button_press():
-    """Callback du bouton - TOUJOURS avec try/except!"""
-    try:
-        print("Bouton appuye!")
-        # Lecture immediate du capteur
-    except Exception as e:
-        print(f"Erreur callback: {e}")
+def button_polling_thread():
+    """Thread de polling du bouton -- TOUJOURS avec try/except!"""
+    last_value = True
+    while not stop_event.is_set():
+        try:
+            current = button.value
+            if last_value and not current:
+                print("Bouton appuye!")
+            last_value = current
+        except Exception as e:
+            print(f"Erreur polling: {e}")
+        time.sleep(0.05)
 
 
 def main():
     """Fonction principale."""
     # Initialiser le capteur AHT20
-    import board
     import adafruit_ahtx0
 
     i2c = board.I2C()
     sensor = adafruit_ahtx0.AHTx0(i2c)
 
-    # Setup button
-    button = Button(BUTTON_PIN, bounce_time=0.1)
-    button.when_pressed = on_button_press
-
     # Creer et demarrer les threads
     producer = threading.Thread(target=read_sensor, args=(sensor,))
     consumer = threading.Thread(target=process_data)
+    btn_thread = threading.Thread(target=button_polling_thread)
 
     producer.start()
     consumer.start()
+    btn_thread.start()
 
     # Attendre la fin (ou Ctrl+C)
     try:
         producer.join()
         consumer.join()
+        btn_thread.join()
     except KeyboardInterrupt:
         print("Arret demande...")
         stop_event.set()
+    finally:
+        button.deinit()
 
 
 if __name__ == "__main__":
@@ -208,17 +219,18 @@ sans risque de corruption de donnees.
 Pour signaler aux threads de s'arreter proprement. Chaque thread verifie
 `stop_event.is_set()` dans sa boucle et sort quand c'est `True`.
 
-### Pourquoi try/except dans les callbacks?
+### Pourquoi try/except dans le thread de polling?
 
-**IMPORTANT**: gpiozero execute les callbacks dans des threads en arriere-plan.
-Les exceptions dans les callbacks sont **SILENCIEUSEMENT IGNOREES**!
-Votre bouton semble "arreter de fonctionner" sans message d'erreur.
+**IMPORTANT**: Le thread de polling du bouton s'execute en arriere-plan.
+Les exceptions dans un thread ne sont **PAS AFFICHEES** dans le terminal
+principal! Votre bouton peut sembler "arreter de fonctionner" sans message
+d'erreur. Toujours entourer le code du thread avec try/except.
 
-### Pourquoi gpiozero?
+### Pourquoi digitalio polling?
 
-- Plus simple que RPi.GPIO
-- Fonctionne sur Raspberry Pi 5
-- API Pythonique avec callbacks
+digitalio est la bibliotheque standard CircuitPython pour les GPIO.
+Le polling dans un thread dedie est simple, fiable, et fonctionne sur
+tous les Raspberry Pi sans dependance supplementaire (via adafruit-blinka).
 
 ---
 

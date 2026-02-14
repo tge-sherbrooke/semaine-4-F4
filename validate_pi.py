@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["gpiozero", "rpi-gpio", "adafruit-blinka"]
+# dependencies = ["adafruit-blinka"]
 # ///
 """
 Local Hardware Validation for Formatif F4
@@ -13,7 +13,7 @@ Usage:
     python3 validate_pi.py
 
 The script will:
-1. Verify gpiozero is installed
+1. Verify digitalio (adafruit-blinka) is installed
 2. Test button connection (if available)
 3. Verify your main.py script
 4. Create marker files for GitHub Actions
@@ -78,22 +78,23 @@ def create_marker(name, content):
 
 
 # ---------------------------------------------------------------------------
-# Test: gpiozero Installation
+# Test: digitalio Installation
 # ---------------------------------------------------------------------------
-def check_gpiozero():
-    """Verify gpiozero is installed and working."""
-    header("GPIOZERO VERIFICATION")
+def check_digitalio():
+    """Verify digitalio (adafruit-blinka) is installed and working."""
+    header("DIGITALIO VERIFICATION")
 
     try:
-        from gpiozero import Button
-        success("gpiozero imported successfully")
-        create_marker("gpiozero_verified", "gpiozero available")
+        import board
+        import digitalio
+        success("digitalio imported successfully")
+        create_marker("digitalio_verified", "digitalio available")
         return True
     except ImportError as e:
-        fail(f"gpiozero import failed: {e}")
+        fail(f"digitalio import failed: {e}")
         print("\n  Install with:")
-        print("    pip install gpiozero")
-        print("\n  Note: gpiozero is usually pre-installed on Raspberry Pi OS")
+        print("    pip install adafruit-blinka")
+        print("\n  Note: adafruit-blinka provides digitalio and board modules")
         return False
 
 
@@ -105,25 +106,27 @@ def check_button():
     header("BUTTON TEST (Optional)")
 
     try:
-        from gpiozero import Button
+        import board
+        import digitalio
 
-        button = Button(17, bounce_time=0.1)
+        button = digitalio.DigitalInOut(board.GP17)
+        button.direction = digitalio.Direction.INPUT
+        button.pull = digitalio.Pull.UP
 
-        info("Button initialized on GPIO 17")
+        info("Button initialized on GPIO 17 (digitalio polling)")
         info("Press the button within 5 seconds to test...")
 
         pressed = False
         start_time = time.time()
 
-        def on_press():
-            nonlocal pressed
-            pressed = True
-            success("Button press detected!")
-
-        button.when_pressed = on_press
-
-        while time.time() - start_time < 5 and not pressed:
-            time.sleep(0.1)
+        try:
+            while time.time() - start_time < 5 and not pressed:
+                if not button.value:  # Pull-up: False = appuye
+                    pressed = True
+                    success("Button press detected!")
+                time.sleep(0.05)
+        finally:
+            button.deinit()
 
         if pressed:
             create_marker("button_verified", "Button GPIO 17 working")
@@ -179,11 +182,12 @@ def check_main_script():
             fail(f"Missing: {desc}")
             all_present = False
 
-    # Check for gpiozero (recommended but not strictly required)
-    if "gpiozero" in content:
-        success("Found: gpiozero import")
+    # Check for digitalio (required for button polling)
+    if "digitalio" in content:
+        success("Found: digitalio import")
     else:
-        warn("gpiozero import not found (recommended for callbacks)")
+        fail("digitalio import not found (required for button polling)")
+        all_present = False
 
     if all_present:
         create_marker("main_script_verified", "Script structure valid")
@@ -201,14 +205,14 @@ def main():
     results = {}
 
     # Run all checks
-    results["gpiozero"] = check_gpiozero()
+    results["digitalio"] = check_digitalio()
     results["Button"] = check_button()
     results["Script"] = check_main_script()
 
     # Summary
     header("FINAL RESULTS")
 
-    all_required_passed = results["gpiozero"] and results["Script"]
+    all_required_passed = results["digitalio"] and results["Script"]
 
     for test, passed in results.items():
         if passed:
