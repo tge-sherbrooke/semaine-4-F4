@@ -38,32 +38,32 @@ jobs:
           echo "milestone_1_passed=true" >> $GITHUB_OUTPUT
 
       # =========================================
-      # MILESTONE 2: Threading Pattern (35 points)
+      # MILESTONE 2: Timer Pattern (35 points)
       # =========================================
-      - name: "Milestone 2: Threading Pattern (35 pts)"
+      - name: "Milestone 2: Timer Pattern (35 pts)"
         id: milestone-2
         continue-on-error: true
         run: |
           echo "=============================================="
-          echo "MILESTONE 2: Threading Pattern"
+          echo "MILESTONE 2: Timer Pattern"
           echo "=============================================="
           echo ""
-          echo "Verifying: threading import, queue import, Queue/Thread usage"
+          echo "Verifying: time import, time.monotonic usage, timer-in-loop pattern"
           echo ""
           pytest tests/test_milestone_02.py -v --tb=short
           echo "milestone_2_passed=true" >> $GITHUB_OUTPUT
 
       # =========================================
-      # MILESTONE 3: Callbacks + Cleanup (40 points)
+      # MILESTONE 3: Bouton + Arret Propre (40 points)
       # =========================================
-      - name: "Milestone 3: Callbacks + Cleanup (40 pts)"
+      - name: "Milestone 3: Bouton + Arret Propre (40 pts)"
         id: milestone-3
         run: |
           echo "=============================================="
-          echo "MILESTONE 3: Callbacks + Cleanup"
+          echo "MILESTONE 3: Bouton + Arret Propre"
           echo "=============================================="
           echo ""
-          echo "Verifying: gpiozero, when_pressed, Event, error handling, Ctrl+C"
+          echo "Verifying: digitalio polling, break for stop, error handling, Ctrl+C"
           echo ""
           pytest tests/test_milestone_03.py -v --tb=short
 
@@ -102,7 +102,7 @@ jobs:
           echo "| Milestone | Points | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| 1. Code Structure | 25 | ${{ steps.milestone-1.outcome == 'success' && 'PASS' || 'FAIL' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 2. Threading Pattern | 35 | ${{ steps.milestone-2.outcome == 'success' && 'PASS' || 'FAIL' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3. Callbacks + Cleanup | 40 | ${{ steps.milestone-3.outcome == 'success' && 'PASS' || 'FAIL' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 2. Timer Pattern | 35 | ${{ steps.milestone-2.outcome == 'success' && 'PASS' || 'FAIL' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3. Bouton + Arret Propre | 40 | ${{ steps.milestone-3.outcome == 'success' && 'PASS' || 'FAIL' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Retries illimites** - Poussez a nouveau pour reessayer!" >> $GITHUB_STEP_SUMMARY

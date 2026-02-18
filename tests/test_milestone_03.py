@@ -1,14 +1,14 @@
 """
-Milestone 3: Bouton Polling et Cleanup (40 points)
-===================================================
+Milestone 3: Bouton Polling et Arret Propre (40 points)
+=======================================================
 
 This milestone verifies that the student has:
 1. Used CircuitPython digitalio for button polling
-2. Implemented clean shutdown with Event
-3. Proper error handling in polling thread
+2. Implemented clean shutdown with break
+3. Proper error handling in the main loop
 4. KeyboardInterrupt handling for Ctrl+C
 
-These tests verify code STRUCTURE for polling and cleanup patterns.
+These tests verify code STRUCTURE for polling and shutdown patterns.
 """
 
 import os
@@ -109,10 +109,10 @@ def test_button_polling_pattern():
     Expected: digitalio configuration and button.value reading
 
     Suggestion: Configure and poll the button:
-        button = digitalio.DigitalInOut(board.GP17)
+        button = digitalio.DigitalInOut(board.D17)
         button.direction = digitalio.Direction.INPUT
         button.pull = digitalio.Pull.UP
-        # In a loop:
+        # In the main loop:
         if not button.value:
             print("Bouton appuye!")
     """
@@ -137,11 +137,11 @@ def test_button_polling_pattern():
             f"Utilisez plutot digitalio polling (button.value dans une boucle)\n"
             f"comme montre dans la theorie.\n\n"
             f"Suggestion: Remplacez le callback par du polling:\n"
-            f"  button = digitalio.DigitalInOut(board.GP17)\n"
+            f"  button = digitalio.DigitalInOut(board.D17)\n"
             f"  button.direction = digitalio.Direction.INPUT\n"
             f"  button.pull = digitalio.Pull.UP\n"
             f"\n"
-            f"  while not stop_event.is_set():\n"
+            f"  while True:\n"
             f"      if not button.value:\n"
             f"          print(\"Bouton appuye!\")\n"
             f"      time.sleep(0.05)\n"
@@ -164,11 +164,11 @@ def test_button_polling_pattern():
             f"\n\n"
             f"Votre code doit lire le bouton par polling avec digitalio.\n"
             f"Configurez avec:\n"
-            f"  button = digitalio.DigitalInOut(board.GP17)\n"
+            f"  button = digitalio.DigitalInOut(board.D17)\n"
             f"  button.direction = digitalio.Direction.INPUT\n"
             f"  button.pull = digitalio.Pull.UP\n\n"
-            f"Puis lisez button.value dans une boucle:\n"
-            f"  while not stop_event.is_set():\n"
+            f"Puis lisez button.value dans la boucle principale:\n"
+            f"  while True:\n"
             f"      if not button.value:\n"
             f"          print(\"Bouton appuye!\")\n"
             f"      time.sleep(0.05)\n"
@@ -176,17 +176,20 @@ def test_button_polling_pattern():
 
 
 # ---------------------------------------------------------------------------
-# Test 3.3: Event for Stop Signal (10 points)
+# Test 3.3: Break for Stop (10 points)
 # ---------------------------------------------------------------------------
-def test_stop_event():
+def test_break_for_stop():
     """
-    Verify that threading.Event is used for clean shutdown.
+    Verify that break is used for clean shutdown from the main loop.
 
-    Expected: Event() creation for stop signaling
+    Expected: 'break' keyword to exit the while True loop
 
-    Suggestion: Use Event for thread coordination:
-        stop_event = threading.Event()
-        stop_event.set()  # Signal threads to stop
+    Suggestion: Use break to exit the main loop when button is held:
+        while True:
+            # ... timer and polling ...
+            if button_held:
+                print("Arret demande...")
+                break
     """
     script_path = REPO_ROOT / "main.py"
 
@@ -195,58 +198,72 @@ def test_stop_event():
 
     content = script_path.read_text()
 
-    has_event = any([
-        "Event()" in content,
-        "threading.Event" in content,
-        "stop_event" in content.lower(),
-        "stop_flag" in content.lower(),
+    # Check for break keyword in the code
+    has_break = "break" in content
+
+    # Also check for hold detection logic (timing for button hold)
+    has_hold_logic = any([
+        re.search(r'hold|maintenu|held|pressed_time|press_start', content, re.IGNORECASE),
+        # Check for a timing pattern related to button state
+        re.search(r'button.*time|time.*button', content, re.IGNORECASE),
+        # Check for a counter or duration pattern
+        re.search(r'duration|compteur|count.*button|button.*count', content, re.IGNORECASE),
     ])
 
-    if not has_event:
+    if not has_break:
         pytest.fail(
             f"\n\n"
-            f"Expected: threading.Event for clean shutdown\n"
-            f"Actual: No Event or stop signal found\n\n"
-            f"Suggestion: Use Event for thread coordination:\n"
-            f"  import threading\n"
+            f"Expected: 'break' pour sortir de la boucle principale\n"
+            f"Actual: Aucun 'break' trouve dans le code\n\n"
+            f"Suggestion: Utilisez break pour arreter le programme\n"
+            f"quand le bouton est maintenu:\n"
+            f"  while True:\n"
+            f"      current_time = time.monotonic()\n"
             f"\n"
-            f"  stop_event = threading.Event()\n"
+            f"      # Timer: lecture capteur\n"
+            f"      if current_time - previous_sensor >= SENSOR_INTERVAL:\n"
+            f"          read_sensor(sensor)\n"
+            f"          previous_sensor = current_time\n"
             f"\n"
-            f"  def read_sensor():\n"
-            f"      while not stop_event.is_set():\n"
-            f"          # Read sensor\n"
-            f"          ...\n"
+            f"      # Bouton: detection de maintien\n"
+            f"      if not button.value:  # Bouton appuye\n"
+            f"          if press_start is None:\n"
+            f"              press_start = current_time\n"
+            f"          elif current_time - press_start >= 2:\n"
+            f"              print(\"Arret demande...\")\n"
+            f"              break\n"
+            f"      else:\n"
+            f"          press_start = None\n"
             f"\n"
-            f"  # To stop all threads:\n"
-            f"  stop_event.set()\n"
+            f"      time.sleep(0.05)\n"
         )
 
 
 # ---------------------------------------------------------------------------
-# Test 3.4: Try/Except in Polling Thread (5 points)
+# Test 3.4: Try/Except in Main Loop (5 points)
 # ---------------------------------------------------------------------------
-def test_callback_error_handling():
+def test_error_handling():
     """
-    Verify that the polling thread includes error handling.
+    Verify that the main loop includes error handling.
 
-    Expected: try/except in polling and thread functions
+    Expected: try/except in main function and sensor reading
 
     WHY THIS MATTERS:
-    Le thread de polling du bouton s'execute en arriere-plan.
-    Les exceptions dans un thread ne sont PAS affichees dans le
-    terminal principal! Toujours entourer le code du thread
-    avec try/except.
+    Le code dans la boucle principale peut lever des exceptions
+    (erreur I2C, capteur deconnecte, etc.). Toujours entourer
+    le code de lecture du capteur et du bouton avec try/except
+    pour eviter un crash du programme.
 
-    Suggestion: Add error handling in polling thread:
-        def button_polling_thread():
-            while not stop_event.is_set():
-                try:
-                    current = button.value
-                    if not current:
-                        print("Bouton appuye!")
-                except Exception as e:
-                    print(f"Erreur polling: {e}")
-                time.sleep(0.05)
+    Suggestion: Add error handling in the main loop:
+        while True:
+            try:
+                current_time = time.monotonic()
+                if current_time - previous >= SENSOR_INTERVAL:
+                    read_sensor(sensor)
+                    previous = current_time
+            except Exception as e:
+                print(f"Erreur: {e}")
+            time.sleep(0.05)
     """
     script_path = REPO_ROOT / "main.py"
 
@@ -265,22 +282,26 @@ def test_callback_error_handling():
             f"Expected: Multiple try/except blocks (at least 2)\n"
             f"Actual: Found {try_count} try blocks, {except_count} except blocks\n\n"
             f"WHY THIS MATTERS:\n"
-            f"  Le thread de polling du bouton s'execute en arriere-plan.\n"
-            f"  Les exceptions dans un thread ne sont PAS affichees\n"
-            f"  dans le terminal principal!\n"
-            f"  Votre bouton peut sembler \"arreter de fonctionner\"\n"
+            f"  Le code dans la boucle principale peut lever des exceptions\n"
+            f"  (erreur I2C, capteur deconnecte, probleme GPIO).\n"
+            f"  Sans try/except, une seule erreur arrete tout le programme.\n"
+            f"  Votre capteur ou bouton peut sembler \"arreter de fonctionner\"\n"
             f"  sans message d'erreur.\n\n"
-            f"Suggestion: TOUJOURS entourer le code du thread\n"
-            f"de polling avec try/except:\n"
-            f"  def button_polling_thread():\n"
-            f"      while not stop_event.is_set():\n"
-            f"          try:\n"
-            f"              current = button.value\n"
-            f"              if not current:\n"
-            f"                  print(\"Bouton appuye!\")\n"
-            f"          except Exception as e:\n"
-            f"              print(f\"Erreur polling: {{e}}\")\n"
+            f"Suggestion: Entourez le code sensible avec try/except:\n"
+            f"  def read_sensor(sensor):\n"
+            f"      try:\n"
+            f"          temperature = sensor.temperature\n"
+            f"          print(f\"Temp: {{temperature:.1f}} C\")\n"
+            f"      except Exception as e:\n"
+            f"          print(f\"Erreur lecture: {{e}}\")\n"
+            f"\n"
+            f"  # Dans la boucle principale:\n"
+            f"  try:\n"
+            f"      while True:\n"
+            f"          # ... timer et polling ...\n"
             f"          time.sleep(0.05)\n"
+            f"  except KeyboardInterrupt:\n"
+            f"      print(\"Arret...\")\n"
         )
 
 
@@ -295,10 +316,14 @@ def test_keyboard_interrupt():
 
     Suggestion: Handle Ctrl+C gracefully:
         try:
-            main()
+            while True:
+                # ... main loop ...
+                time.sleep(0.05)
         except KeyboardInterrupt:
             print("Arret demande...")
-            stop_event.set()
+        finally:
+            button.deinit()
+            print("Nettoyage termine.")
     """
     script_path = REPO_ROOT / "main.py"
 
@@ -315,12 +340,16 @@ def test_keyboard_interrupt():
             f"Expected: KeyboardInterrupt handling\n"
             f"Actual: No KeyboardInterrupt handler found\n\n"
             f"Suggestion: Handle Ctrl+C for clean exit:\n"
-            f"  if __name__ == \"__main__\":\n"
-            f"      try:\n"
-            f"          main()\n"
-            f"      except KeyboardInterrupt:\n"
-            f"          print(\"Arret demande...\")\n"
-            f"          stop_event.set()\n"
+            f"  try:\n"
+            f"      while True:\n"
+            f"          # ... boucle principale ...\n"
+            f"          time.sleep(0.05)\n"
+            f"  except KeyboardInterrupt:\n"
+            f"      print(\"Arret demande (Ctrl+C)...\")\n"
+            f"  finally:\n"
+            f"      button.deinit()\n"
+            f"      print(\"Nettoyage termine.\")\n"
             f"\n"
-            f"This ensures threads stop cleanly when user presses Ctrl+C.\n"
+            f"Le bloc finally s'execute toujours, meme apres Ctrl+C.\n"
+            f"Utilisez-le pour liberer les ressources GPIO.\n"
         )

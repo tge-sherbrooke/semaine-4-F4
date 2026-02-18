@@ -15,7 +15,7 @@ Usage:
 The script will:
 1. Verify digitalio (adafruit-blinka) is installed
 2. Test button connection (if available)
-3. Verify your main.py script
+3. Verify your main.py script (timer pattern)
 4. Create marker files for GitHub Actions
 
 After running successfully, commit and push the .test_markers/ folder.
@@ -109,7 +109,7 @@ def check_button():
         import board
         import digitalio
 
-        button = digitalio.DigitalInOut(board.GP17)
+        button = digitalio.DigitalInOut(board.D17)
         button.direction = digitalio.Direction.INPUT
         button.pull = digitalio.Pull.UP
 
@@ -145,7 +145,7 @@ def check_button():
 # Test: Script Validation
 # ---------------------------------------------------------------------------
 def check_main_script():
-    """Verify main.py script."""
+    """Verify main.py script uses timer pattern."""
     header("SCRIPT VALIDATION")
 
     script_path = Path(__file__).parent / "main.py"
@@ -169,8 +169,7 @@ def check_main_script():
     # Check required content
     content = script_path.read_text()
     checks = [
-        ("import threading", "threading import"),
-        ("import queue", "queue import"),
+        ("import time", "time import"),
         ("__main__", "main guard"),
     ]
 
@@ -187,6 +186,13 @@ def check_main_script():
         success("Found: digitalio import")
     else:
         fail("digitalio import not found (required for button polling)")
+        all_present = False
+
+    # Check for time.monotonic (required for timer pattern)
+    if "time.monotonic" in content or "monotonic()" in content:
+        success("Found: time.monotonic usage")
+    else:
+        fail("time.monotonic not found (required for timer pattern)")
         all_present = False
 
     if all_present:
