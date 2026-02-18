@@ -1,4 +1,4 @@
-# Formatif F4 — Threading et Bouton Polling Python
+# Formatif F4 — Timer et Bouton Polling Python
 
 **Cours** : 243-413-SH — Introduction aux objets connectes
 **Semaine** : 4
@@ -14,10 +14,10 @@
 Le laboratoire de la semaine 4 vous a guide a travers :
 
 - Structuration d'un script Python avec fonctions et main guard
-- Creation de threads pour lectures de capteurs en arriere-plan
-- Utilisation de `queue.Queue` pour communication thread-safe
-- Lecture d'un bouton par polling digitalio dans un thread dedie
-- Arret propre d'un programme multi-threade
+- Utilisation de `time.monotonic()` pour des timers non-bloquants
+- Pattern timer-in-loop pour executer des actions a intervalles reguliers
+- Lecture d'un bouton par polling digitalio dans la boucle principale
+- Arret propre avec `break` et `finally`
 
 Ce formatif vous demande d'appliquer ces competences de maniere autonome.
 
@@ -30,8 +30,8 @@ Ce formatif utilise des **jalons progressifs** avec retroaction detaillee:
 | Jalon | Points | Verification |
 |-------|--------|-------------|
 | **Milestone 1** | 25 pts | Script main.py, garde `__main__`, fonctions, constantes |
-| **Milestone 2** | 35 pts | Imports threading/queue, utilisation Queue et Thread |
-| **Milestone 3** | 40 pts | digitalio bouton polling, Event pour arret, gestion erreurs |
+| **Milestone 2** | 35 pts | Imports time, utilisation `time.monotonic()`, pattern timer-in-loop |
+| **Milestone 3** | 40 pts | digitalio bouton polling, `break` pour arret, gestion erreurs |
 
 **Chaque test echoue vous dit**:
 - Ce qui etait attendu
@@ -44,10 +44,9 @@ Ce formatif utilise des **jalons progressifs** avec retroaction detaillee:
 
 Ce formatif vise a verifier que vous etes capable de :
 1. Structurer du code Python avec des fonctions et un garde main
-2. Utiliser le threading pour des lectures de capteurs non-bloquantes
-3. Utiliser Queue pour la communication thread-safe
-4. Lire un bouton avec digitalio polling dans un thread dedie
-5. Gerer proprement l'arret du programme (Ctrl+C)
+2. Utiliser `time.monotonic()` pour des timers non-bloquants dans une boucle
+3. Detecter le bouton par polling avec digitalio dans la boucle principale
+4. Gerer proprement l'arret du programme (maintien du bouton + Ctrl+C)
 
 ---
 
@@ -58,10 +57,10 @@ Ce formatif vise a verifier que vous etes capable de :
 > "Quand tu appuies sur le bouton pendant que le capteur est en lecture,
 > rien ne se passe. Le programme est bloque par `time.sleep(5)`!"
 
-**Solution**: Le threading permet de:
-- Lire les capteurs en arriere-plan (thread producteur)
-- Traiter les donnees dans un autre thread (thread consommateur)
-- Detecter les appuis bouton immediatement (polling dans un thread)
+**Solution**: Le pattern timer-in-loop avec `time.monotonic()` permet de:
+- Lire les capteurs a intervalles reguliers SANS bloquer
+- Detecter les appuis bouton immediatement dans la meme boucle
+- Arreter proprement en maintenant le bouton
 
 ---
 
@@ -73,26 +72,26 @@ Ce formatif vise a verifier que vous etes capable de :
 +-------------------------------------------------------------+
 |                                                             |
 |  1. Creer main.py avec la structure de base                 |
-|     +-- Imports (threading, queue, digitalio)               |
+|     +-- Imports (time, board, digitalio)                    |
 |     +-- Constantes de configuration                         |
-|     +-- Fonctions (read_sensor, publish_data)               |
+|     +-- Fonctions (read_sensor)                             |
 |     +-- Garde __main__                                      |
 |                                                             |
-|  2. Ajouter le pattern producteur-consommateur              |
-|     +-- Queue pour les donnees                              |
-|     +-- Thread producteur (lecture capteur)                 |
-|     +-- Thread consommateur (traitement/publication)        |
-|     +-- Event pour l'arret propre                           |
+|  2. Ajouter le pattern timer-in-loop                        |
+|     +-- time.monotonic() pour mesurer le temps              |
+|     +-- Comparaison d'intervalle (>= SENSOR_INTERVAL)       |
+|     +-- Lecture capteur a intervalle regulier                |
 |                                                             |
-|  3. Ajouter le polling bouton digitalio                     |
-|     +-- Thread de polling avec button.value                 |
-|     +-- Gestion d'erreurs dans le thread de polling         |
-|     +-- Gestion de KeyboardInterrupt                        |
+|  3. Ajouter le polling bouton                               |
+|     +-- button.value dans la boucle principale              |
+|     +-- Detection de transition (appui/relache)             |
 |                                                             |
-|  4. Tester sur Raspberry Pi                                 |
-|     +-- python3 validate_pi.py                              |
+|  4. Ajouter le maintien pour l'arret                        |
+|     +-- break quand bouton maintenu >= 2 secondes           |
+|     +-- finally pour cleanup (button.deinit())              |
 |                                                             |
-|  5. Pousser vers GitHub                                     |
+|  5. Tester sur Raspberry Pi                                 |
+|     +-- uv run main.py                                      |
 |                                                             |
 +-------------------------------------------------------------+
 ```
@@ -106,21 +105,15 @@ Ce formatif vise a verifier que vous etes capable de :
 # requires-python = ">=3.9"
 # dependencies = ["adafruit-blinka"]
 # ///
-"""Programme principal avec threading et bouton polling."""
+"""Programme principal avec timer et bouton polling."""
 
-import threading
-import queue
 import time
 import board
 import digitalio
 
 # Configuration
 SENSOR_INTERVAL = 5  # secondes entre lectures
-BUTTON_PIN = board.GP17  # GPIO pour le bouton
-
-# Communication inter-threads
-data_queue = queue.Queue()
-stop_event = threading.Event()
+BUTTON_PIN = board.D17  # GPIO pour le bouton (board.D17 pour Blinka)
 
 # Configuration du bouton
 button = digitalio.DigitalInOut(BUTTON_PIN)
@@ -129,107 +122,97 @@ button.pull = digitalio.Pull.UP
 
 
 def read_sensor(sensor):
-    """Thread producteur: lit le capteur periodiquement."""
-    while not stop_event.is_set():
-        try:
-            temperature = sensor.temperature
-            humidity = sensor.relative_humidity
-            data = {"temperature": temperature, "humidity": humidity}
-            data_queue.put(data)
-            print(f"Lecture: {data}")
-        except Exception as e:
-            print(f"Erreur lecture: {e}")
-        time.sleep(SENSOR_INTERVAL)
-
-
-def process_data():
-    """Thread consommateur: traite les donnees de la queue."""
-    while not stop_event.is_set():
-        try:
-            data = data_queue.get(timeout=1)
-            # Traiter/publier les donnees
-            print(f"Traitement: {data}")
-        except queue.Empty:
-            continue  # Pas de donnees, continuer
-
-
-def button_polling_thread():
-    """Thread de polling du bouton -- TOUJOURS avec try/except!"""
-    last_value = True
-    while not stop_event.is_set():
-        try:
-            current = button.value
-            if last_value and not current:
-                print("Bouton appuye!")
-            last_value = current
-        except Exception as e:
-            print(f"Erreur polling: {e}")
-        time.sleep(0.05)
+    """Lire le capteur et afficher les donnees."""
+    try:
+        temperature = sensor.temperature
+        humidity = sensor.relative_humidity
+        print(f"Temperature: {temperature:.1f} C, Humidite: {humidity:.1f} %")
+    except Exception as e:
+        print(f"Erreur lecture: {e}")
 
 
 def main():
-    """Fonction principale."""
-    # Initialiser le capteur AHT20
+    """Fonction principale avec boucle timer + bouton."""
     import adafruit_ahtx0
 
     i2c = board.I2C()
     sensor = adafruit_ahtx0.AHTx0(i2c)
 
-    # Creer et demarrer les threads
-    producer = threading.Thread(target=read_sensor, args=(sensor,))
-    consumer = threading.Thread(target=process_data)
-    btn_thread = threading.Thread(target=button_polling_thread)
+    previous_sensor = time.monotonic()
+    last_button = True
+    press_start = None
 
-    producer.start()
-    consumer.start()
-    btn_thread.start()
-
-    # Attendre la fin (ou Ctrl+C)
     try:
-        producer.join()
-        consumer.join()
-        btn_thread.join()
+        while True:
+            current_time = time.monotonic()
+
+            # Timer: lecture capteur a intervalle regulier
+            if current_time - previous_sensor >= SENSOR_INTERVAL:
+                read_sensor(sensor)
+                previous_sensor = current_time
+
+            # Polling bouton: detection de transition
+            current_button = button.value
+            if last_button and not current_button:
+                print("Bouton appuye!")
+            last_button = current_button
+
+            # Maintien bouton: arret apres 2 secondes
+            if not current_button:
+                if press_start is None:
+                    press_start = current_time
+                elif current_time - press_start >= 2:
+                    print("Arret demande (bouton maintenu)...")
+                    break
+            else:
+                press_start = None
+
+            time.sleep(0.05)
     except KeyboardInterrupt:
-        print("Arret demande...")
-        stop_event.set()
+        print("Arret demande (Ctrl+C)...")
     finally:
         button.deinit()
+        print("Nettoyage termine.")
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("Programme termine.")
-        stop_event.set()
+    main()
 ```
 
 ---
 
 ## Points cles
 
-### Pourquoi `queue.Queue`?
+### Pourquoi `time.monotonic()`?
 
-Les variables partagees entre threads peuvent causer des "race conditions".
-`Queue` est thread-safe: plusieurs threads peuvent faire `.put()` et `.get()`
-sans risque de corruption de donnees.
+`time.sleep(5)` **bloque** tout le programme pendant 5 secondes -- impossible
+de lire le bouton pendant ce temps. `time.monotonic()` mesure le temps ecoule
+**sans bloquer**: la boucle continue de tourner rapidement (~50ms) et verifie
+si l'intervalle est atteint a chaque iteration.
 
-### Pourquoi `threading.Event`?
+### Pourquoi le polling dans la boucle principale?
 
-Pour signaler aux threads de s'arreter proprement. Chaque thread verifie
-`stop_event.is_set()` dans sa boucle et sort quand c'est `True`.
+Une seule boucle `while True` gere tout: les timers ET le bouton. A chaque
+iteration (~50ms), on verifie si le capteur doit etre lu ET si le bouton est
+appuye. C'est le meme pattern que sur un microcontroleur.
 
-### Pourquoi try/except dans le thread de polling?
+### Pourquoi try/except dans la boucle?
 
-**IMPORTANT**: Le thread de polling du bouton s'execute en arriere-plan.
-Les exceptions dans un thread ne sont **PAS AFFICHEES** dans le terminal
-principal! Votre bouton peut sembler "arreter de fonctionner" sans message
-d'erreur. Toujours entourer le code du thread avec try/except.
+Les erreurs de lecture capteur (I2C deconnecte, capteur defaillant) ne doivent
+pas faire crasher tout le programme. En entourant le code sensible de
+try/except, le programme continue de fonctionner meme si une lecture echoue.
+
+### Pourquoi `break` au lieu de `threading.Event`?
+
+Le pattern timer-in-loop utilise une seule boucle `while True`. Pour en sortir,
+on utilise simplement `break` (par exemple, quand le bouton est maintenu pendant
+2 secondes). C'est plus simple et direct que le mecanisme Event du threading.
+Le threading sera enseigne plus tard dans le cours.
 
 ### Pourquoi digitalio polling?
 
 digitalio est la bibliotheque standard CircuitPython pour les GPIO.
-Le polling dans un thread dedie est simple, fiable, et fonctionne sur
+Le polling dans la boucle principale est simple, fiable, et fonctionne sur
 tous les Raspberry Pi sans dependance supplementaire (via adafruit-blinka).
 
 ---
@@ -238,7 +221,7 @@ tous les Raspberry Pi sans dependance supplementaire (via adafruit-blinka).
 
 Dans ce depot, vous devez avoir :
 
-- [ ] `main.py` — Script principal avec threading
+- [ ] `main.py` — Script principal avec timer et bouton polling
 - [ ] `.test_markers/` — Dossier cree par `validate_pi.py`
 
 ---
