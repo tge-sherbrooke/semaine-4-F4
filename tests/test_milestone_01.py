@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Milestone 1: Code Structure (25 points)
 =======================================
@@ -9,7 +8,7 @@ This milestone verifies that the student has:
 3. Defined configuration constants
 
 These tests analyze code structure via AST/regex.
-No actual thread execution (would be flaky in CI).
+Tests analyze code structure via AST/regex, not execution.
 """
 
 import os
@@ -44,7 +43,7 @@ def test_main_script_exists():
     Expected: main.py file present
 
     Suggestion: Create a file named main.py at the repository root.
-    This will be your main program with threading.
+    This will be your main program with timer and button polling.
     """
     script_path = REPO_ROOT / "main.py"
 
@@ -52,7 +51,7 @@ def test_main_script_exists():
         f"\n\n"
         f"Expected: main.py file in repository root\n"
         f"Actual: File not found at {script_path}\n\n"
-        f"Suggestion: Create main.py with your threading code.\n"
+        f"Suggestion: Create main.py with your timer and button polling code.\n"
     )
 
 
