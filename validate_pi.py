@@ -1,6 +1,10 @@
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["adafruit-blinka"]
+# dependencies = [
+#     "adafruit-blinka",
+#     "adafruit-circuitpython-ahtx0",
+#     "rpi-lgpio",
+# ]
 # ///
 """
 Local Hardware Validation for Formatif F4
@@ -88,12 +92,27 @@ def check_digitalio():
         import board
         import digitalio
         success("digitalio imported successfully")
+
+        # GPIO smoke test: verify GPIO backend works (catches Pi 4 + rpi-lgpio)
+        try:
+            pin = digitalio.DigitalInOut(board.D4)
+            pin.deinit()
+            success("GPIO backend working (smoke test D4)")
+        except RuntimeError as e:
+            warn(f"GPIO initialization failed - likely Raspberry Pi 4")
+            print(f"\n  Erreur: {e}")
+            print("  Sur Pi 4, remplacez \"rpi-lgpio\" par \"rpi.gpio\" :")
+            print("    pip install rpi.gpio")
+            print("  Puis relancez validate_pi.py")
+            return False
+
         create_marker("digitalio_verified", "digitalio available")
         return True
     except ImportError as e:
         fail(f"digitalio import failed: {e}")
         print("\n  Install with:")
-        print("    pip install adafruit-blinka")
+        print("    uv run validate_pi.py")
+        print("    # ou: pip install adafruit-blinka rpi-lgpio")
         print("\n  Note: adafruit-blinka provides digitalio and board modules")
         return False
 
@@ -134,6 +153,14 @@ def check_button():
         else:
             warn("No button press detected - this is optional")
             return True  # Optional, don't fail
+
+    except RuntimeError as e:
+        warn(f"GPIO initialization failed - likely Raspberry Pi 4")
+        print(f"\n  Erreur: {e}")
+        print("  Sur Pi 4, remplacez \"rpi-lgpio\" par \"rpi.gpio\" :")
+        print("    pip install rpi.gpio")
+        print("  Puis relancez validate_pi.py")
+        return True  # Optional, don't fail
 
     except Exception as e:
         warn(f"Button test skipped: {e}")
