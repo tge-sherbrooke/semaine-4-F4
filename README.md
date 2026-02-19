@@ -103,7 +103,11 @@ Ce formatif vise a verifier que vous etes capable de :
 ```python
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["adafruit-blinka"]
+# dependencies = [
+#     "adafruit-blinka",
+#     "adafruit-circuitpython-ahtx0",
+#     "rpi-lgpio",
+# ]
 # ///
 """Programme principal avec timer et bouton polling."""
 
@@ -178,6 +182,8 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+> **Raspberry Pi 4** : Remplacez `"rpi-lgpio"` par `"rpi.gpio"` dans les dependances PEP 723.
 
 ---
 
